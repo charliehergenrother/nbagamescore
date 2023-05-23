@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 from game import Game, Team, Player
 import os
 import time
@@ -49,6 +48,7 @@ def process_team_name(team):
 def process_args():
     argcounter = 1
     count_max = 100
+    year_max = 0
     year = "2023"
     start_year = ""
     end_year = ""
@@ -66,22 +66,29 @@ def process_args():
         elif sys.argv[argcounter] == '-m':
             if int(sys.argv[argcounter + 1]):
                 count_max = int(sys.argv[argcounter + 1])
+                year_max = 0
+                argcounter += 1
+        elif sys.argv[argcounter] == '-p':
+            if int(sys.argv[argcounter + 1]):
+                year_max = int(sys.argv[argcounter + 1])
+                count_max = 0
                 argcounter += 1
         elif sys.argv[argcounter] == '-c':
             individual = False
         elif sys.argv[argcounter] == '-h':
             print("Welcome to the NBA Playoff game tracker!")
             print("I print out the best playoff player-games in a particular year.")
-            print("Usage: ./scraper.py [-h] [-m <max>] [-y <year>] [-r <start year> <end year> [-c/-i]]")
+            print("Usage: ./scraper.py [-h] [-m <max>/-p <max/year>] [-y <year>] [-r <start year> <end year> [-c/-i]]")
             print("     -h: print this help message")
-            print("     -m: print this many games. (Default: 100)")
+            print("     -m: print and count this many games. (Default: 100)")
+            print("     -p: When doing a year range, print and count this many games per year. (Default: 100)")
             print("     -y: Use this year. (Default: 2023)")
             print("     -r: Use this year range instead of a single year.")
             print("     -c: When doing a year range, combine the years to give an overall look at that span of time.")
             print("     -i: When doing a year range, process and print each year individually. (default)")
             sys.exit()
         argcounter += 1
-    return year, start_year, end_year, count_max, individual
+    return year, start_year, end_year, count_max, year_max, individual
 
 #records stats for a particular player in a particular game
 def process_player(line, player_team, opp_team, game):
@@ -219,50 +226,73 @@ def check_and_add(dictionary, key, value, increment):
     else:
         dictionary[key] = value
 
+#shorten some nickname for the purpose of printing
+def shorten_nickname(nickname):
+    if "Sonics" in nickname:
+        return "Sonics"
+    if "Blazers" in nickname:
+        return "Blazers"
+    if "Timberwolves" == nickname:
+        return "T'Wolves"
+    return nickname
+
 #process and print results for a particular year in the NBA playoffs
-def process_playoffs(games, count_max, individual, year_range=""):
+def process_playoffs(games, count_max, year_max, individual, year_range=""):
     team_games = [x.home_team for x in games] + [x.away_team for x in games]
     player_games = list()
     for x in team_games:
         player_games += x.players
     name_len = max([len(x.name) for x in player_games])
     nickname_len = max([len(x) for x in NICKNAMES])
-    player_totals, team_totals = print_games(count_max, name_len, nickname_len, player_games, individual, year_range)
+    player_totals, team_totals, year_totals = print_games(count_max, year_max, name_len, nickname_len, player_games, individual, year_range)
     print_players(player_totals, team_totals, name_len)
     print_teams(team_totals)
+    #print_years(year_totals)
 
 #print the best individual player-games for a particular year or range of years
-def print_games(count_max, name_len, nickname_len, player_games, individual, year_range):
+def print_games(count_max, year_max, name_len, nickname_len, player_games, individual, year_range):
+    years_eligible = dict()
     if individual:
         year_title = str(player_games[0].game.year)
     else:
         year_title = year_range
+        if year_max:
+            for y in range(int(year_range.split("-")[0]), int(year_range.split("-")[1])+1):
+                years_eligible[y] = year_max
     print(year_title, SEPARATOR_LINE)
     print("Player".ljust(name_len), "Team".ljust(nickname_len), "Opponent/Game".ljust(nickname_len + 10), "Pt Rb As St Bk TO FG%    3FG%   FT%    +/- FG At 3P At FT At Score")
     player_series_tracker = dict()
     player_totals = dict()
     team_totals = dict()
+    year_totals = dict()
     game_count = 0
     for player_game in sorted(player_games, key=lambda x: x.game_score, reverse=True):
         counts = True
+        if year_max and player_game.game.year not in years_eligible:
+            continue
         check_and_add(player_series_tracker, tuple([player_game.name, player_game.opp_team.nickname, \
                 player_game.game.year]), 1, 1)
         if player_series_tracker[tuple([player_game.name, player_game.opp_team.nickname, player_game.game.year])] >= 5:
-            count_max += 1
+            if count_max:
+                count_max += 1
+            else:
+                years_eligible[player_game.game.year] += 1
             counts = False
         if counts and player_game.name in player_totals:
             player_totals[player_game.name]["score"] += player_game.game_score
             player_totals[player_game.name]["games"] += 1
+            check_and_add(player_totals[player_game.name]["teams"], player_game.team.team_name, \
+                    player_game.game_score, player_game.game_score)
         elif counts:
             player_totals[player_game.name] = {"score": player_game.game_score, \
-                    "team": player_game.team.city + " " + player_game.team.nickname, \
+                    "teams": {player_game.team.team_name: player_game.game_score}, \
                     "games": 1}
-        full_team = player_game.team.city + " " + player_game.team.nickname
         if counts:
-            if full_team in team_totals:
-                team_totals[full_team]["score"] += player_game.game_score
+            if player_game.team.team_name in team_totals:
+                team_totals[player_game.team.team_name]["score"] += player_game.game_score
             else:
-                team_totals[full_team] = {"score": player_game.game_score, "players": list()}
+                team_totals[player_game.team.team_name] = {"score": player_game.game_score, "players": list()}
+            check_and_add(year_totals, player_game.game.year, 1, 1)
         opp_string = ""
         if not individual:
             opp_string = str(player_game.game.year) + " "
@@ -274,7 +304,7 @@ def print_games(count_max, name_len, nickname_len, player_games, individual, yea
             pm_string = "+" + str(player_game.plus_minus)
         else:
             pm_string = str(player_game.plus_minus)
-        opp_string += player_game.opp_team.nickname + " Game " + str(player_game.game.game_num)
+        opp_string += shorten_nickname(player_game.opp_team.nickname) + " Game " + str(player_game.game.game_num)
         FG_string = get_pct_out(player_game.FG, player_game.FGA)
         FG3_string = get_pct_out(player_game.FG3, player_game.FGA3)
         FT_string = get_pct_out(player_game.FT, player_game.FTA)
@@ -289,10 +319,15 @@ def print_games(count_max, name_len, nickname_len, player_games, individual, yea
                 str(player_game.FT).rjust(2), str(player_game.FTA).rjust(2), \
                 round(player_game.game_score, 4))
         game_count += 1
-        if game_count >= count_max:
+        if count_max and game_count >= count_max:
             break
+        if years_eligible:
+            if years_eligible[player_game.game.year] == 1:
+                del years_eligible[player_game.game.year]
+            else:
+                years_eligible[player_game.game.year] -= 1
     print()
-    return player_totals, team_totals
+    return player_totals, team_totals, year_totals
 
 #print the players with the best run in a particular playoff year
 def print_players(player_totals, team_totals, name_len):
@@ -304,7 +339,8 @@ def print_players(player_totals, team_totals, name_len):
             game_str = " games)"
         print(str(rank).rjust(2) + ".", player.ljust(name_len), str(round(player_totals[player]["score"], 4)).rjust(9), \
                 "(" + str(player_totals[player]["games"]) + game_str)
-        team_totals[player_totals[player]["team"]]["players"].append(player + " (" + str(rank) + ")")
+        primary_team = sorted(player_totals[player]["teams"], key=lambda x: player_totals[player]["teams"][x], reverse=True)[0] 
+        team_totals[primary_team]["players"].append(player + " (" + str(rank) + ")")
         rank += 1
     print()
 
@@ -319,22 +355,26 @@ def print_teams(team_totals):
         rank += 1
     print()
 
+def print_years(year_totals):
+    for year in sorted(year_totals):
+        print(year, year_totals[year])
+
 def main():
-    year, start_year, end_year, count_max, individual = process_args()
+    year, start_year, end_year, count_max, year_max, individual = process_args()
     if start_year:
         games = list()
         for year in range(int(start_year), int(end_year) + 1):
             if individual:
                 games = do_scrape(str(year))
-                process_playoffs(games, count_max, individual)
+                process_playoffs(games, count_max, year_max, individual)
             else:
                 games += do_scrape(str(year))
         if not individual:
-            process_playoffs(games, count_max, individual, start_year + "-" + end_year)
+            process_playoffs(games, count_max, year_max, individual, start_year + "-" + end_year)
 
     else:
         games = do_scrape(str(year))
-        process_playoffs(games, count_max, individual)
+        process_playoffs(games, count_max, year_max, individual)
 
 if __name__ == '__main__':
     main()
