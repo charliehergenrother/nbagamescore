@@ -254,13 +254,15 @@ def print_games(count_max, year_max, name_len, nickname_len, player_games, indiv
     years_eligible = dict()
     if individual:
         year_title = str(player_games[0].game.year)
+        if year_max:
+            count_max = year_max
     else:
         year_title = year_range
         if year_max:
             for y in range(int(year_range.split("-")[0]), int(year_range.split("-")[1])+1):
                 years_eligible[y] = year_max
     print(year_title, SEPARATOR_LINE)
-    print("Player".ljust(name_len), "Team".ljust(nickname_len), "Opponent/Game".ljust(nickname_len + 10), "Pt Rb As St Bk TO FG%    3FG%   FT%    +/- FG At 3P At FT At Score")
+    print("Player".ljust(name_len), "Team".ljust(nickname_len), "Opponent/Game".ljust(nickname_len + 11), "Pt Rb As St Bk TO FG%    3FG%   FT%    +/- FG At 3P At FT At Score")
     player_series_tracker = dict()
     player_totals = dict()
     team_totals = dict()
@@ -268,7 +270,7 @@ def print_games(count_max, year_max, name_len, nickname_len, player_games, indiv
     game_count = 0
     for player_game in sorted(player_games, key=lambda x: x.game_score, reverse=True):
         counts = True
-        if year_max and player_game.game.year not in years_eligible:
+        if not individual and year_max and player_game.game.year not in years_eligible:
             continue
         check_and_add(player_series_tracker, tuple([player_game.name, player_game.opp_team.nickname, \
                 player_game.game.year]), 1, 1)
@@ -297,19 +299,20 @@ def print_games(count_max, year_max, name_len, nickname_len, player_games, indiv
         if not individual:
             opp_string = str(player_game.game.year) + " "
         if player_game.team.home:
-            opp_string += "v. "
+            opp_string += "v "
         else:
             opp_string += "@ "
         if player_game.plus_minus >= 0:
             pm_string = "+" + str(player_game.plus_minus)
         else:
             pm_string = str(player_game.plus_minus)
-        opp_string += shorten_nickname(player_game.opp_team.nickname) + " Game " + str(player_game.game.game_num)
+        opp_string += shorten_nickname(player_game.opp_team.nickname)
+        game_string = " Game " + str(player_game.game.game_num)
         FG_string = get_pct_out(player_game.FG, player_game.FGA)
         FG3_string = get_pct_out(player_game.FG3, player_game.FGA3)
         FT_string = get_pct_out(player_game.FT, player_game.FTA)
         print(player_game.name.ljust(name_len), player_game.team.nickname.ljust(nickname_len), \
-                opp_string.ljust(nickname_len + 10), str(player_game.points).rjust(2), \
+                opp_string.ljust(nickname_len + 3), game_string, str(player_game.points).rjust(2), \
                 str(player_game.rebounds).rjust(2), str(player_game.assists).rjust(2), \
                 str(player_game.steals).rjust(2), str(player_game.blocks).rjust(2), \
                 str(player_game.turnovers).rjust(2), FG_string.ljust(6), FG3_string.ljust(6), \
