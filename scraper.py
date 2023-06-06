@@ -53,6 +53,8 @@ def process_args():
     start_year = ""
     end_year = ""
     individual = True
+    full_run = False
+    run_max = 100
     while argcounter < len(sys.argv):
         if sys.argv[argcounter] == '-y':
             if int(sys.argv[argcounter + 1]):
@@ -69,26 +71,32 @@ def process_args():
                 year_max = 0
                 argcounter += 1
         elif sys.argv[argcounter] == '-p':
-            if int(sys.argv[argcounter + 1]):
+            if sys.argv[argcounter + 1].isnumeric():
                 year_max = int(sys.argv[argcounter + 1])
                 count_max = 0
                 argcounter += 1
         elif sys.argv[argcounter] == '-c':
             individual = False
+        elif sys.argv[argcounter] == '-f':
+            full_run = True
+            if len(sys.argv) > argcounter + 1 and sys.argv[argcounter + 1].isnumeric():
+                run_max = int(sys.argv[argcounter + 1])
+                argcounter += 1
         elif sys.argv[argcounter] == '-h':
             print("Welcome to the NBA Playoff game tracker!")
             print("I print out the best playoff player-games in a particular year.")
-            print("Usage: ./scraper.py [-h] [-m <max>/-p <max/year>] [-y <year>] [-r <start year> <end year> [-c/-i]]")
+            print("Usage: ./scraper.py [-h] [-y <year>] [-m <max>/-p <max/year>] [-r <start year> <end year> [-c/-i]] [-f [<run_max>]]")
             print("     -h: print this help message")
-            print("     -m: print and count this many games. (Default: 100)")
-            print("     -p: When doing a year range, print and count this many games per year. (Default: 100)")
             print("     -y: Use this year. (Default: 2023)")
             print("     -r: Use this year range instead of a single year.")
+            print("     -m: print and count this many games. (Default: 100)")
+            print("     -p: When doing a year range, print and count this many games per year. (Default: 100)")
             print("     -c: When doing a year range, combine the years to give an overall look at that span of time.")
             print("     -i: When doing a year range, process and print each year individually. (default)")
+            print("     -f: Full year mode. Rank player-year runs against each other over time. Print this many. (Default: 100)")
             sys.exit()
         argcounter += 1
-    return year, start_year, end_year, count_max, year_max, individual
+    return year, start_year, end_year, count_max, year_max, individual, full_run, run_max
 
 #records stats for a particular player in a particular game
 def process_player(line, player_team, opp_team, game):
@@ -237,7 +245,7 @@ def shorten_nickname(nickname):
     return nickname
 
 #process and print results for a particular year in the NBA playoffs
-def process_playoffs(games, count_max, year_max, individual, year_range=""):
+def process_playoffs(games, count_max, year_max, individual, full_run, run_max, year_range=""):
     team_games = [x.home_team for x in games] + [x.away_team for x in games]
     player_games = list()
     for x in team_games:
@@ -247,6 +255,8 @@ def process_playoffs(games, count_max, year_max, individual, year_range=""):
     player_totals, team_totals, year_totals = print_games(count_max, year_max, name_len, nickname_len, player_games, individual, year_range)
     print_players(player_totals, team_totals, name_len)
     print_teams(team_totals)
+    if full_run:
+        print_runs(player_totals, run_max, name_len)
     #print_years(year_totals)
 
 #print the best individual player-games for a particular year or range of years
@@ -285,9 +295,12 @@ def print_games(count_max, year_max, name_len, nickname_len, player_games, indiv
             player_totals[player_game.name]["games"] += 1
             check_and_add(player_totals[player_game.name]["teams"], player_game.team.team_name, \
                     player_game.game_score, player_game.game_score)
+            check_and_add(player_totals[player_game.name]["year"], player_game.game.year, \
+                    player_game.game_score, player_game.game_score)
         elif counts:
             player_totals[player_game.name] = {"score": player_game.game_score, \
                     "teams": {player_game.team.team_name: player_game.game_score}, \
+                    "year": {player_game.game.year: player_game.game_score}, \
                     "games": 1}
         if counts:
             if player_game.team.team_name in team_totals:
@@ -362,22 +375,34 @@ def print_years(year_totals):
     for year in sorted(year_totals):
         print(year, year_totals[year])
 
+def print_runs(player_totals, run_max, name_len):
+    runs = list()
+    count = 0
+    for player in player_totals:
+        for year in player_totals[player]["year"]:
+            runs.append((player, year, player_totals[player]["year"][year]))
+    for run in sorted(runs, key=lambda x: x[2], reverse=True):
+        print(run[1], run[0].ljust(name_len), round(run[2], 4))
+        count += 1
+        if count >= run_max:
+            break
+
 def main():
-    year, start_year, end_year, count_max, year_max, individual = process_args()
+    year, start_year, end_year, count_max, year_max, individual, full_run, run_max = process_args()
     if start_year:
         games = list()
         for year in range(int(start_year), int(end_year) + 1):
             if individual:
                 games = do_scrape(str(year))
-                process_playoffs(games, count_max, year_max, individual)
+                process_playoffs(games, count_max, year_max, individual, full_run, run_max)
             else:
                 games += do_scrape(str(year))
         if not individual:
-            process_playoffs(games, count_max, year_max, individual, start_year + "-" + end_year)
+            process_playoffs(games, count_max, year_max, individual, full_run, run_max, start_year + "-" + end_year)
 
     else:
         games = do_scrape(str(year))
-        process_playoffs(games, count_max, year_max, individual)
+        process_playoffs(games, count_max, year_max, individual, full_run, run_max)
 
 if __name__ == '__main__':
     main()
