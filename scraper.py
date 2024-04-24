@@ -49,7 +49,7 @@ def process_args():
     argcounter = 1
     count_max = 100
     year_max = 0
-    year = "2023"
+    year = "2024"
     start_year = ""
     end_year = ""
     individual = True
@@ -87,7 +87,7 @@ def process_args():
             print("I print out the best playoff player-games in a particular year.")
             print("Usage: ./scraper.py [-h] [-y <year>] [-m <max>/-p <max/year>] [-r <start year> <end year> [-c/-i]] [-f [<run_max>]]")
             print("     -h: print this help message")
-            print("     -y: Use this year. (Default: 2023)")
+            print("     -y: Use this year. (Default: 2024)")
             print("     -r: Use this year range instead of a single year.")
             print("     -m: print and count this many games. (Default: 100)")
             print("     -p: When doing a year range, print and count this many games per year. (Default: 100)")
